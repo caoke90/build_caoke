@@ -1,0 +1,15 @@
+{
+  "name": "build_caoke",
+  "version": "1.2.0",
+  "description": "build_caoke ",
+
+  "license": "MIT",
+  "dependencies": {
+      "underscore":"1.8.3",
+      "wind":"0.7.3",
+      "gulp":"3.9.0",
+      "gulp-concat":"2.6.0",
+      "gulp-uglify":"1.2.0",
+      "del":"1.2.0"
+  }
+}
