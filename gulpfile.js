@@ -1,4 +1,15 @@
-﻿require("./gulp_Api")
+﻿//作者：微信号caoke90
+var _=require("underscore")
+var Wind = require("wind")
+var Wind.logger.level = Wind.Logging.Level.WARN;
+var cc=console
+var path=require("path")
+var gulp = require('gulp');
+var concat = require('gulp-concat');
+var uglify = require('gulp-uglify');
+var del=require("del")
+var fs=require("fs")
+
 var solveModule=function(){
     var hello={
         //cache for js and module that has added into jsList to be loaded.
@@ -28,7 +39,7 @@ var solveModule=function(){
     return hello
 }
 
-//改变html
+//压缩html
 var buildHtml=eval(Wind.compile("async", function (appdir) {
 
     var html=fs.readFileSync(path.join(appdir,"index.html")).toString()
@@ -54,7 +65,7 @@ var backHtml=eval(Wind.compile("async", function (appdir) {
     var html=fs.readFileSync(path.join(appdir,"index.html")).toString()
     //存在压缩
     if(/[\n ]+<script [^\n]+build\.min\.js[^\n]+/gi.test(html)){
-        cc.log("存在压缩")
+        cc.log("html还原中……")
         html=html.replace(/[\n ]+<script [^\n]+build\.min\.js[^\n]+/gi,function(){
             return '\n<script src="'+path.join(project_json.engineDir,"/CCBoot.js")+'"></script>'+'\n<script src="main.js"></script>'
         })
@@ -64,7 +75,7 @@ var backHtml=eval(Wind.compile("async", function (appdir) {
 }))
 
 //合并压缩js
-var buildOne=eval(Wind.compile("async", function (appdir,callback) {
+var buildJs=eval(Wind.compile("async", function (appdir,callback) {
 
     cc.log(appdir)
     var res={}
@@ -78,8 +89,8 @@ var buildOne=eval(Wind.compile("async", function (appdir,callback) {
         renderMode:0
     }
     var project_js='document["ccConfig"]='+JSON.stringify(project_jsmin)+";"
-    fs.writeFileSync(path.join(appdir,"project.js"),project_js)
-    cc.log("创建project.js")
+    fs.writeFileSync(path.join(appdir,"$project.js"),project_js)
+    cc.log("创建$project.js")
     //cocos-js地址
     var engineDir=path.join(appdir,res.project_json.engineDir)
 
@@ -108,19 +119,22 @@ var buildOne=eval(Wind.compile("async", function (appdir,callback) {
 
     //附加私有js
     var alljs=[
-        path.join(appdir,"project.js"),
+        path.join(appdir,"$project.js"),
         path.join(engineDir,"/CCBoot.js")
     ]
         .concat(newJsList).concat(jsList)
         .concat([path.join(appdir,"main.js")])
     cc.log(alljs)
     cc.log("压缩中……")
-    var watcher = gulp.watch(path.join(appdir,'build.min.js'));
-    watcher.on('change', function(event) {
-        console.log('File ' + event.path + ' was ' + event.type + ', running tasks...');
-        watcher.end()
-        callback()
-    });
+    var intev=setInterval(function(){
+        cc.log("intev")
+        if(fs.existsSync(path.join(appdir,"build.min.js"))){
+            //删除$project.js
+            fs.unlinkSync(path.join(appdir,"$project.js"))
+            callback()
+            clearInterval(this)
+        }
+    },5000)
     gulp.src(alljs)
 
         .pipe(uglify())    //压缩
@@ -130,94 +144,77 @@ var buildOne=eval(Wind.compile("async", function (appdir,callback) {
 
 
 }))
-var buildOneAsync=Wind.Async.Binding.fromCallback(function(appdir,callback){
-    buildOne(appdir,callback).start()
+var buildJsAsync=Wind.Async.Binding.fromCallback(function(appdir,callback){
+    buildJs(appdir,callback).start()
 })
-var copyOne=eval(Wind.compile("async", function (appdir,callback) {
-
-    cc.log(appdir)
-    var newappdir=path.join("../../cocos2d-js-v3.6-build/build_caoke/",appdir)
-    gulp.src([path.join(appdir+"/**")])
-        .pipe(gulp.dest(newappdir));
-
+var backJsAsync=eval(Wind.compile("async", function (appdir) {
+    fs.unlinkSync(path.join(appdir,"build.min.js"))
 }))
-var copyOneAsync=Wind.Async.Binding.fromCallback(function(appdir,callback){
-    copyOne(appdir,callback).start()
-})
-//复制文件夹
-var task=eval(Wind.compile("async", function (appdir) {
 
+
+
+//单独执行的时候
+var singleRun=eval(Wind.compile("async", function (appdir) {
+    var appdir=__dirname
     var exsit=fs.existsSync(path.join(appdir,"build.min.js"))
     if(!exsit){
-        $await(buildOneAsync(appdir))
-        //删除project.js
-        fs.unlinkSync(path.join(appdir,"project.js"))
+        cc.log("压缩中……")
+        $await(buildHtml(appdir))
+        $await(buildJsAsync(appdir))
+
+    }else{
+        cc.log("解压中……")
+        fs.unlinkSync(path.join(appdir,"build.min.js"))
+        $await(backHtml(appdir))
     }
 }))
-var task2=eval(Wind.compile("async", function (appdir) {
-    $await(buildOneAsync(appdir))
-    //删除project.js
-    fs.unlinkSync(path.join(appdir,"project.js"))
+module.exports.buildHtml=buildHtml
+module.exports.backHtml=backHtml
+module.exports.buildJsAsync=buildJsAsync
+module.exports.backJsAsync=backJsAsync
 
-}))
+module.exports.singleRun=singleRun
 
-//改变html
-gulp.task("buildHtml",function(){
-    var arr=require("./configArr")
+var exsit1=fs.existsSync(path.join(__dirname,"index.html"))
+var exsit2=fs.existsSync(path.join(__dirname,"project.json"))
+
+if(exsit1&&exsit2){
+    singleRun().start()
+}else{
+    var dirArr=[]
+    function walk(path2){
+        var dirList = fs.readdirSync(path2);
+        dirList.forEach(function(item){
+            if(fs.statSync(path2 + '/' + item).isDirectory()){
+                var exsit1=fs.existsSync(path.join(path2 + '/' + item,"gulpfile.js"))
+                if(exsit1){
+                    dirArr.push(path2 + '/' + item)
+                }else{
+                    walk(path2 + '/' + item);
+                }
+            }
+        });
+    }
+    walk(__dirname)
+    cc.log(dirArr)
     var allTask=eval(Wind.compile("async", function (appdir) {
 
-        for(var i=0;i<arr.length;i++){
+        for(var i=0;i<dirArr.length;i++){
             cc.log("当前任务："+(i+1))
-            $await(buildHtml(arr[i]))
+            var exsit=fs.existsSync(path.join(dirArr[i],"build.min.js"))
+            if(exsit){
+                cc.log("已存在")
+            }else{
+                $await(buildHtml(dirArr[i]))
+                $await(buildJsAsync(dirArr[i]))
+            }
+
         }
         cc.log("over………………")
         cc.log("3秒后自动退出")
         setTimeout(function(){},3000)
     }))
     allTask().start()
-})
-//压缩过的不压缩
-gulp.task("yasuo1",function(){
-    var arr=require("./configArr")
-    var allTask=eval(Wind.compile("async", function (appdir) {
+}
 
-        for(var i=0;i<arr.length;i++){
-            cc.log("当前任务："+(i+1))
-            $await(task(arr[i]))
-        }
-        cc.log("over………………")
-        cc.log("3秒后自动退出")
-        setTimeout(function(){},3000)
-    }))
-    allTask().start()
-})
-//强制都压缩
-gulp.task("yasuo2",function(){
-    var arr=require("./configArr")
-    var allTask=eval(Wind.compile("async", function (appdir) {
 
-        for(var i=0;i<arr.length;i++){
-            cc.log("当前任务："+(i+1))
-            $await(task2(arr[i]))
-        }
-        cc.log("over………………")
-        cc.log("3秒后自动退出")
-        setTimeout(function(){},3000)
-    }))
-    allTask().start()
-})
-//还原html
-gulp.task("default",function(){
-    var arr=require("./configArr")
-    cc.log(arr)
-    var allTask=eval(Wind.compile("async", function (appdir) {
-        for(var i=0;i<arr.length;i++){
-            cc.log("当前任务："+(i+1))
-            $await(backHtml(arr[i]))
-        }
-        cc.log("over……………………")
-        cc.log("3秒后自动退出")
-        setTimeout(function(){},3000)
-    }))
-    allTask().start()
-})
