@@ -1,4 +1,6 @@
 # cocos2d-js 3.6以上自动化压缩打包工具
+# 主要解决 如何方便的、批量的打包项目
+
 # build_caoke
 
 安装需要nodejs，以及相关的模块，都写在package.json，在当前目录 npm install -g
