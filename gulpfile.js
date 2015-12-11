@@ -186,7 +186,7 @@ if(exsit1&&exsit2){
         var dirList = fs.readdirSync(path2);
         dirList.forEach(function(item){
             if(fs.statSync(path2 + '/' + item).isDirectory()){
-                var exsit1=fs.existsSync(path.join(path2 + '/' + item,"gulpfile.js"))
+                var exsit1=fs.existsSync(path.join(path2 + '/' + item,"index.html"))
                 if(exsit1){
                     dirArr.push(path2 + '/' + item)
                 }else{
